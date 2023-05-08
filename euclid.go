@@ -55,7 +55,7 @@ func main() {
 		resp, body, errs := request.Post("https://api.openai.com/v1/completions").
 			Set("Content-Type", "application/json").
 			Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
-            Send(fmt.Sprintf(`{"prompt": "%s", "model": "text-davinci-003", "temperature": 1.0, "max_tokens": 4000}`, input)).
+            Send(fmt.Sprintf(`{"prompt": "%s", "model": "text-davinci-003", "temperature": 1.0, "max_tokens": 1000}`, input)).
 			End()
 
 		if errs != nil {
@@ -87,7 +87,7 @@ func main() {
 			continue
 		}
 
-		fmt.Println(completion)
+		fmt.Println("\033[1m" + completion + "\033[0m\n")
 	}
 }
 
