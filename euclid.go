@@ -1,14 +1,15 @@
 package main
 
 import (
-    "bufio"
     "encoding/json"
     "fmt"
     "path/filepath"
 	"io/ioutil"
 	"os"
+    "log"
 	"strings"
 	"gopkg.in/yaml.v2"
+    "github.com/chzyer/readline"
 	"github.com/parnurzeal/gorequest"
 )
 
@@ -40,16 +41,70 @@ func main() {
         os.Exit(1)
     }
 
-	reader := bufio.NewReader(os.Stdin)
+    rl, err := readline.New("> ")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rl.Close()
+
+    var (
+		line   string
+		history []string
+		pos    int
+	)
 
 	for {
-		fmt.Print("> ")
-		input, _ := reader.ReadString('\n')
+
+        rl.Config.AutoComplete = readline.NewPrefixCompleter(
+			readline.PcItem("/quit"),
+		)
+		input, err := rl.Readline()
+		if err != nil {
+			break
+		}
+
 		input = strings.TrimSpace(input)
+
+		if input == "" {
+			continue
+		}
 
 		if input == "/quit" {
 			break
 		}
+
+		if input == "/history" {
+			for _, h := range history {
+				fmt.Println(h)
+			}
+			continue
+		}
+
+		if input == "up" {
+			if pos > 0 {
+				pos--
+				line = history[pos]
+				rl.SetPrompt(fmt.Sprintf("> %s", line))
+			}
+			continue
+		}
+
+		if input == "down" {
+			if pos < len(history)-1 {
+				pos++
+				line = history[pos]
+				rl.SetPrompt(fmt.Sprintf("> %s", line))
+			} else {
+				pos = len(history)
+				rl.SetPrompt("> ")
+				line = ""
+			}
+			continue
+		}
+
+		history = append(history, input)
+		pos = len(history)
+
 
 		request := gorequest.New()
 		resp, body, errs := request.Post("https://api.openai.com/v1/completions").
@@ -87,7 +142,8 @@ func main() {
 			continue
 		}
 
-		fmt.Println("\033[1m" + completion + "\033[0m\n")
+        // Clean line and print in bold
+		fmt.Print("\033[2K\r\n\033[1m" + strings.TrimSpace(completion) + "\033[0m\n\n")
 	}
 }
 
