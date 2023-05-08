@@ -37,7 +37,7 @@ func main() {
     config, err := loadConfig()
 
     if err != nil {
-        fmt.Print("Error loading config: %s\n", err)
+        fmt.Print("Failed to load configuration")
         os.Exit(1)
     }
 
