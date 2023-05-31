@@ -17,6 +17,19 @@ type Config struct {
 	OpenAIKey string `yaml:"openai_key"`
 }
 
+type Message struct {
+    Role        string `json:"role"`
+    Content     string `json:"content"`
+}
+
+type Conversation struct {
+	Messages []Message `json:"messages"`
+
+}
+
+const str_prefix = "This is our conversation so far, use it to create your response:\n"
+
+
 func loadConfig() (*Config, error) {
 	configFilePath := filepath.Join(os.Getenv("HOME"), ".openai.yaml")
 	configFile, err := ioutil.ReadFile(configFilePath)
@@ -47,16 +60,29 @@ func main() {
 	}
 	defer rl.Close()
 
+    // Prompt input_history
     var (
-		line   string
-		history []string
-		pos    int
+		line string
+		input_history []string
+		index_history int
+		conversation Conversation
+        opt_memory bool
+        prompt string
+        api_postfix string
+        model string
 	)
+
+    opt_memory = false
+    api_postfix = "completions"
+    model = "text-davinci-003"
 
 	for {
 
         rl.Config.AutoComplete = readline.NewPrefixCompleter(
 			readline.PcItem("/quit"),
+			readline.PcItem("/input_history"),
+			readline.PcItem("/enable_memory"),
+			readline.PcItem("/disable_memory"),
 		)
 		input, err := rl.Readline()
 		if err != nil {
@@ -73,44 +99,78 @@ func main() {
 			break
 		}
 
-		if input == "/history" {
-			for _, h := range history {
+        if input == "/enable_memory" {
+            opt_memory = true
+            api_postfix = "chat/completions"
+            model = "gpt-3.5-turbo"
+            continue
+        }
+
+        if input == "/disable_memory" {
+            opt_memory = false
+            api_postfix = "completions"
+            model = "text-davinci-003"
+            continue
+        }
+
+		if input == "/input_history" {
+			for _, h := range input_history {
 				fmt.Println(h)
 			}
 			continue
 		}
 
 		if input == "up" {
-			if pos > 0 {
-				pos--
-				line = history[pos]
+			if index_history > 0 {
+				index_history--
+				line = input_history[index_history]
 				rl.SetPrompt(fmt.Sprintf("> %s", line))
 			}
 			continue
 		}
 
 		if input == "down" {
-			if pos < len(history)-1 {
-				pos++
-				line = history[pos]
+			if index_history < len(input_history)-1 {
+				index_history++
+				line = input_history[index_history]
 				rl.SetPrompt(fmt.Sprintf("> %s", line))
 			} else {
-				pos = len(history)
+				index_history = len(input_history)
 				rl.SetPrompt("> ")
 				line = ""
 			}
 			continue
 		}
 
-		history = append(history, input)
-		pos = len(history)
+		input_history = append(input_history, input)
+		index_history = len(input_history)
+
+
+        if opt_memory == true {
+            message_user := Message{
+			    Role: "user",
+    			Content: input,
+    		}
+	
+            conversation.Messages = append(conversation.Messages, message_user)
+
+            data, err := json.Marshal(conversation.Messages)
+            prompt = "\"messages\": "  + string(data) 
+
+            if err != nil {
+                fmt.Println(err)
+                continue
+            }
+        } else {
+            prompt = "\"prompt\": \"" + input + "\""
+        }
 
 
 		request := gorequest.New()
-		resp, body, errs := request.Post("https://api.openai.com/v1/completions").
+		resp, body, errs := request.Post("https://api.openai.com/v1/" + api_postfix).
 			Set("Content-Type", "application/json").
 			Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
-            Send(fmt.Sprintf(`{"prompt": "%s", "model": "text-davinci-003", "temperature": 1.0, "max_tokens": 1000}`, input)).
+            Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, model)).
 			End()
 
 		if errs != nil {
@@ -130,20 +190,42 @@ func main() {
 			continue
 		}
 
-		choices, ok := response["choices"].([]interface{})
-		if !ok || len(choices) == 0 {
-			fmt.Println("Unable to retrieve completion from response")
-			continue
-		}
+        completion := ""
 
-		completion, ok := choices[0].(map[string]interface{})["text"].(string)
-		if !ok {
-			fmt.Println("Unable to retrieve completion from response")
-			continue
-		}
+        if opt_memory == true {
+		    content, ok := response["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
+
+    		if !ok || len(content) == 0 {
+                fmt.Println("Unable to retrieve completion from response")
+    			continue
+    		}
+
+            completion = content
+        } else {
+		    choices, ok := response["choices"].([]interface{})
+    		if !ok || len(choices) == 0 {
+    			fmt.Println("Unable to retrieve completion from response")
+    			continue
+    		}
+    		reply, ok := choices[0].(map[string]interface{})["text"].(string)
+	    	if !ok {
+    			fmt.Println("Unable to retrieve completion from response")
+			    continue
+		    }
+            completion = reply
+        }
 
         // Clean line and print in bold
 		fmt.Print("\033[2K\r\n\033[1m" + strings.TrimSpace(completion) + "\033[0m\n\n")
+
+        if opt_memory == true {
+            message_assistant := Message {
+			    Role: "assistant",
+                Content: strings.TrimSpace(completion),
+		    }
+		
+            conversation.Messages = append(conversation.Messages, message_assistant)
+        }
 	}
 }
 
