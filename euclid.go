@@ -8,9 +8,12 @@ import (
 	"os"
     "log"
 	"strings"
+    "flag"
 	"gopkg.in/yaml.v2"
     "github.com/chzyer/readline"
 	"github.com/parnurzeal/gorequest"
+	"github.com/mitchellh/go-wordwrap"
+	"github.com/buger/goterm"
 )
 
 type Config struct {
@@ -24,36 +27,65 @@ type Message struct {
 
 type Conversation struct {
 	Messages []Message `json:"messages"`
-
 }
 
-const str_prefix = "This is our conversation so far, use it to create your response:\n"
-
-
-func loadConfig() (*Config, error) {
-	configFilePath := filepath.Join(os.Getenv("HOME"), ".openai.yaml")
-	configFile, err := ioutil.ReadFile(configFilePath)
+func execSingle(config *Config) {
+    rl, err := readline.New("> ")
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
+	}
+	defer rl.Close()
+
+    input, err := rl.Readline()
+	if err != nil {
+		return
 	}
 
-	var config Config
-	err = yaml.Unmarshal(configFile, &config)
-	if err != nil {
-		return nil, err
-	}
+    var prompt string
+    prompt = "\"prompt\": \"" + input + "\""
+    request := gorequest.New()
+    resp, body, errs := request.Post("https://api.openai.com/v1/completions").
+        Set("Content-Type", "application/json").
+        Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
+        Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, "text-davinci-003")).
+        End()
 
-    return &config, nil
-}
-
-func main() {
-    config, err := loadConfig()
-
-    if err != nil {
-        fmt.Print("Failed to load configuration")
-        os.Exit(1)
+    if errs != nil {
+        fmt.Println(errs)
+        return
     }
 
+    if resp.StatusCode != 200 {
+        fmt.Printf("Received non-200 status code: %d\n", resp.StatusCode)
+        return
+    }
+
+    var response map[string]interface{}
+    err = json.Unmarshal([]byte(body), &response)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+
+    completion := ""
+
+    choices, ok := response["choices"].([]interface{})
+    if !ok || len(choices) == 0 {
+        fmt.Println("Unable to retrieve completion from response")
+        return
+    }
+    reply, ok := choices[0].(map[string]interface{})["text"].(string)
+    if !ok {
+        fmt.Println("Unable to retrieve completion from response")
+        return
+    }
+    completion = reply
+
+    // Clean line and print reply in bold
+    fmt.Print("\033[2K\r\n\033[1m" + strings.TrimSpace(completion) + "\033[0m\n\n")
+}
+
+func execInteractive(config *Config) {
     rl, err := readline.New("> ")
 	if err != nil {
 		log.Fatal(err)
@@ -66,24 +98,15 @@ func main() {
 		input_history []string
 		index_history int
 		conversation Conversation
-        opt_memory bool
         prompt string
-        api_postfix string
-        model string
 	)
 
-    opt_memory = false
-    api_postfix = "completions"
-    model = "text-davinci-003"
-
 	for {
-
         rl.Config.AutoComplete = readline.NewPrefixCompleter(
 			readline.PcItem("/quit"),
 			readline.PcItem("/input_history"),
-			readline.PcItem("/enable_memory"),
-			readline.PcItem("/disable_memory"),
 		)
+
 		input, err := rl.Readline()
 		if err != nil {
 			break
@@ -98,20 +121,6 @@ func main() {
 		if input == "/quit" {
 			break
 		}
-
-        if input == "/enable_memory" {
-            opt_memory = true
-            api_postfix = "chat/completions"
-            model = "gpt-3.5-turbo"
-            continue
-        }
-
-        if input == "/disable_memory" {
-            opt_memory = false
-            api_postfix = "completions"
-            model = "text-davinci-003"
-            continue
-        }
 
 		if input == "/input_history" {
 			for _, h := range input_history {
@@ -145,32 +154,26 @@ func main() {
 		input_history = append(input_history, input)
 		index_history = len(input_history)
 
-
-        if opt_memory == true {
-            message_user := Message{
-			    Role: "user",
-    			Content: input,
-    		}
-	
-            conversation.Messages = append(conversation.Messages, message_user)
-
-            data, err := json.Marshal(conversation.Messages)
-            prompt = "\"messages\": "  + string(data) 
-
-            if err != nil {
-                fmt.Println(err)
-                continue
-            }
-        } else {
-            prompt = "\"prompt\": \"" + input + "\""
+        message_user := Message{
+            Role: "user",
+            Content: input,
         }
 
+        conversation.Messages = append(conversation.Messages, message_user)
 
-		request := gorequest.New()
-		resp, body, errs := request.Post("https://api.openai.com/v1/" + api_postfix).
+        data, err := json.Marshal(conversation.Messages)
+        prompt = "\"messages\": "  + string(data)
+
+        if err != nil {
+            fmt.Println(err)
+            continue
+        }
+
+        request := gorequest.New()
+		resp, body, errs := request.Post("https://api.openai.com/v1/chat/completions").
 			Set("Content-Type", "application/json").
 			Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
-            Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, model)).
+            Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, "gpt-3.5-turbo")).
 			End()
 
 		if errs != nil {
@@ -192,40 +195,77 @@ func main() {
 
         completion := ""
 
-        if opt_memory == true {
-		    content, ok := response["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
+        content, ok := response["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
 
-    		if !ok || len(content) == 0 {
-                fmt.Println("Unable to retrieve completion from response")
-    			continue
-    		}
-
-            completion = content
-        } else {
-		    choices, ok := response["choices"].([]interface{})
-    		if !ok || len(choices) == 0 {
-    			fmt.Println("Unable to retrieve completion from response")
-    			continue
-    		}
-    		reply, ok := choices[0].(map[string]interface{})["text"].(string)
-	    	if !ok {
-    			fmt.Println("Unable to retrieve completion from response")
-			    continue
-		    }
-            completion = reply
+        if !ok || len(content) == 0 {
+            fmt.Println("Unable to retrieve completion from response")
+            continue
         }
 
-        // Clean line and print in bold
-		fmt.Print("\033[2K\r\n\033[1m" + strings.TrimSpace(completion) + "\033[0m\n\n")
+        completion = content
 
-        if opt_memory == true {
-            message_assistant := Message {
-			    Role: "assistant",
-                Content: strings.TrimSpace(completion),
-		    }
-		
-            conversation.Messages = append(conversation.Messages, message_assistant)
+        // Get the terminal line length
+        lineLength := uint(goterm.Width())
+
+        // Clean line and print reply in bold
+        hyphenated := wordwrap.WrapString(strings.TrimSpace(completion), lineLength)
+
+		fmt.Print("\033[2K\r\n\033[1m" + hyphenated + "\033[0m\n\n")
+
+        message_assistant := Message {
+            Role: "assistant",
+            Content: strings.TrimSpace(completion),
         }
+
+        conversation.Messages = append(conversation.Messages, message_assistant)
 	}
+}
+
+
+func loadConfig() (*Config, error) {
+	configFilePath := filepath.Join(os.Getenv("HOME"), ".openai.yaml")
+	configFile, err := ioutil.ReadFile(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	err = yaml.Unmarshal(configFile, &config)
+	if err != nil {
+		return nil, err
+	}
+
+    return &config, nil
+}
+
+func main() {
+    var mode_interactive bool
+    mode_interactive = false
+
+    // Define command line switches
+    interactive := flag.Bool("interactive", false, "Enable interactive mode")
+
+    // Parse command line arguments
+    flag.Parse()
+
+    // Check if a specific argument was provided
+    if flag.Parsed() {
+        if *interactive {
+            mode_interactive = true;
+        }
+    }
+
+    config, err := loadConfig()
+
+    if err != nil {
+        fmt.Print("Failed to load configuration")
+        os.Exit(1)
+    }
+
+    if mode_interactive == true {
+        execInteractive(config)
+    } else {
+        execSingle(config)
+    }
 }
 
