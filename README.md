@@ -21,11 +21,3 @@ Quits the program
 
 __/input_history__
 Shows the history of user inputs
-
-__/enable_memory__
-Enables chat mode, where the conversation history is
-retained.
-
-__/disable_memory__
-Disables chat mode, this is more suitable for one-of
-queries.
