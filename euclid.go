@@ -29,20 +29,12 @@ type Conversation struct {
 	Messages []Message `json:"messages"`
 }
 
-func execSingle(config *Config) {
-    rl, err := readline.New("> ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rl.Close()
+func execSingle(config *Config, cliInput *string) {
+    if len(*cliInput) == 0 {
+        return
+    }
 
-    input, err := rl.Readline()
-	if err != nil {
-		return
-	}
-
-    var prompt string
-    prompt = "\"prompt\": \"" + input + "\""
+    prompt := "\"prompt\": \"" + *cliInput + "\""
     request := gorequest.New()
     resp, body, errs := request.Post("https://api.openai.com/v1/completions").
         Set("Content-Type", "application/json").
@@ -61,7 +53,7 @@ func execSingle(config *Config) {
     }
 
     var response map[string]interface{}
-    err = json.Unmarshal([]byte(body), &response)
+    err := json.Unmarshal([]byte(body), &response)
     if err != nil {
         fmt.Println(err)
         return
@@ -82,7 +74,7 @@ func execSingle(config *Config) {
     completion = reply
 
     // Clean line and print reply in bold
-    fmt.Print("\033[2K\r\n\033[1m" + strings.TrimSpace(completion) + "\033[0m\n\n")
+    fmt.Println(strings.TrimSpace(completion))
 }
 
 func execInteractive(config *Config) {
@@ -107,11 +99,11 @@ func execInteractive(config *Config) {
 			readline.PcItem("/input_history"),
 		)
 
-		input, err := rl.Readline()
+        input, err := rl.Readline()
 		if err != nil {
-			break
-		}
-
+		   	break
+	    }
+        
 		input = strings.TrimSpace(input)
 
 		if input == "" {
@@ -244,6 +236,7 @@ func main() {
 
     // Define command line switches
     interactive := flag.Bool("interactive", false, "Enable interactive mode")
+    prompt := flag.String("prompt", "", "Prompt text")
 
     // Parse command line arguments
     flag.Parse()
@@ -265,7 +258,7 @@ func main() {
     if mode_interactive == true {
         execInteractive(config)
     } else {
-        execSingle(config)
+        execSingle(config, prompt)
     }
 }
 
