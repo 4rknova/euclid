@@ -10,6 +10,9 @@ following contents:
     model_single: gpt-3.5-turbo-instruct
     model_chat: gpt-3.5-turbo
 
+For more information on available models, see:
+https://platform.openai.com/docs/models
+
 # Usage
 
 Simply type your prompts and press return to interact
