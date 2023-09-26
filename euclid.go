@@ -39,7 +39,7 @@ func execSingle(config *Config, cliInput *string) {
     resp, body, errs := request.Post("https://api.openai.com/v1/completions").
         Set("Content-Type", "application/json").
         Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
-        Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, "text-davinci-003")).
+        Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, "gpt-3.5-turbo-instruct")).
         End()
 
     if errs != nil {
@@ -257,7 +257,7 @@ func main() {
 
     if mode_interactive == true {
         execInteractive(config)
-    } else {
+    } else { 
         execSingle(config, prompt)
     }
 }
