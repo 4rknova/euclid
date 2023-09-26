@@ -19,10 +19,19 @@ Simply type your prompts and press return to interact
 with ChatGPT. You can use the up / down arrow keys to
 navigate previous prompts.
 
-The following commands are supported:
+If euclid is run without any arguments, it will do nothing.
 
-__/quit__
-Quits the program
+The following command line switches are available:
 
-__/input_history__
-Shows the history of user inputs
+
+| Switch              | Description                      |
+|:--------------------|:---------------------------------|
+| --interactive       | Launches euclid in chat mode     |
+| --prompt "<string>" | Used for one-off interactions    |
+
+The following commands are supported in interactive mode:
+
+| Command             | Description                      |
+|:--------------------|:---------------------------------|
+| __/quit__           | Quits the program                |
+|__/input_history__   | Shows the history of user inputs |
