@@ -24,14 +24,14 @@ If euclid is run without any arguments, it will do nothing.
 The following command line switches are available:
 
 
-| Switch              | Description                      |
-|:--------------------|:---------------------------------|
-| --interactive       | Launches euclid in chat mode     |
-| --prompt "<string>" | Used for one-off interactions    |
+| Switch                | Description                      |
+|:----------------------|:---------------------------------|
+| --interactive         | Launches euclid in chat mode     |
+| --prompt "\<string\>" | Used for one-off interactions    |
 
 The following commands are supported in interactive mode:
 
-| Command             | Description                      |
-|:--------------------|:---------------------------------|
-| __/quit__           | Quits the program                |
-|__/input_history__   | Shows the history of user inputs |
+| Command               | Description                      |
+|:----------------------|:---------------------------------|
+| __/quit__             | Quits the program                |
+|__/input_history__     | Shows the history of user inputs |
