@@ -3,10 +3,12 @@ Euclid is a simple command line interface for ChatGPT.
 # Configuration
 
 To use the tool, create a configuration file at your
-user home directory called ".openai.yaml" with the
+user home directory called ".euclid.yaml" with the
 following contents:
 
-    "openai_key": <YOUR OPENAI API KEY>
+    openai_key: <YOUR OPENAI API KEY>
+    model_single: gpt-3.5-turbo-instruct
+    model_chat: gpt-3.5-turbo
 
 # Usage
 

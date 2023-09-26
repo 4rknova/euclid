@@ -18,6 +18,8 @@ import (
 
 type Config struct {
 	OpenAIKey string `yaml:"openai_key"`
+    ModelSingle string `yaml:"model_single"`
+    ModelChat string `yaml:"model_chat"`
 }
 
 type Message struct {
@@ -39,7 +41,7 @@ func execSingle(config *Config, cliInput *string) {
     resp, body, errs := request.Post("https://api.openai.com/v1/completions").
         Set("Content-Type", "application/json").
         Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
-        Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, "gpt-3.5-turbo-instruct")).
+        Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, config.ModelSingle)).
         End()
 
     if errs != nil {
@@ -165,7 +167,7 @@ func execInteractive(config *Config) {
 		resp, body, errs := request.Post("https://api.openai.com/v1/chat/completions").
 			Set("Content-Type", "application/json").
 			Set("Authorization", fmt.Sprintf("Bearer %s", config.OpenAIKey)).
-            Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, "gpt-3.5-turbo")).
+            Send(fmt.Sprintf(`{ %s, "model": "%s", "temperature": 0.5, "max_tokens": 1000}`, prompt, config.ModelChat)).
 			End()
 
 		if errs != nil {
@@ -213,9 +215,9 @@ func execInteractive(config *Config) {
 	}
 }
 
+var	configFilePath = filepath.Join(os.Getenv("HOME"), ".euclid.yaml")
 
 func loadConfig() (*Config, error) {
-	configFilePath := filepath.Join(os.Getenv("HOME"), ".openai.yaml")
 	configFile, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		return nil, err
@@ -228,6 +230,28 @@ func loadConfig() (*Config, error) {
 	}
 
     return &config, nil
+}
+
+func CreateConfig() (error) {
+    config := Config {
+        OpenAIKey: "<your_key>",
+        ModelSingle: "gpt-3.5-turbo-instruct",
+        ModelChat: "gpt-3.5-turbo",
+    }
+
+    data, err := yaml.Marshal(&config)
+
+    if err != nil {
+        return err
+    }
+
+    err2 := ioutil.WriteFile(configFilePath, data, 0777)
+
+    if err2 != nil {
+        return err
+    }
+
+    return nil
 }
 
 func main() {
@@ -251,7 +275,15 @@ func main() {
     config, err := loadConfig()
 
     if err != nil {
-        fmt.Print("Failed to load configuration")
+        fmt.Print("Failed to load configuration\n")
+        err2 := CreateConfig()
+
+        if err2 != nil {
+            fmt.Print("Failed to create empty configuration\n")
+        }
+
+        fmt.Print("Created an empty configuration file, please add your openai access token in ", configFilePath, "\n")
+
         os.Exit(1)
     }
 
